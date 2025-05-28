@@ -335,12 +335,17 @@ async def draw_messages(
 
                         # Expect one ToolMessage for each tool call.
                         for _ in range(len(call_results)):
-                            tool_result: ChatMessage = await anext(messages_agen)
-
-                            if tool_result.type != "tool":
-                                st.error(f"Unexpected ChatMessage type: {tool_result.type}")
-                                st.write(tool_result)
+                            tool_result_candidate = await anext(messages_agen, None)
+                            # Consume any intermediate string tokens until we get a ChatMessage
+                            while isinstance(tool_result_candidate, str):
+                                tool_result_candidate = await anext(messages_agen, None)
+                                if tool_result_candidate is None:
+                                    st.error("Stream ended unexpectedly while waiting for tool result.")
+                                    st.stop()
+                            if tool_result_candidate is None:
+                                st.error("Failed to get tool result object from stream after skipping strings.")
                                 st.stop()
+                            tool_result: ChatMessage = tool_result_candidate
 
                             # Record the message if it's new, and update the correct
                             # status container with the result
